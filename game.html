@@ -511,7 +511,9 @@ btnLanConnect.addEventListener('click', ()=>{
 
 function connectWS(displayName){
   try{
-    const url = `ws://${location.hostname}:8888`;
+    const url = (location.hostname.includes("render"))
+  ? `wss://${location.hostname}/ws`
+  : `ws://${location.hostname}:8888`;
     ws = new WebSocket(url);
   }catch(e){
     alert('WebSocket oluşturulamadı: ' + e.message);
