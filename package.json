@@ -1,12 +1,11 @@
 {
   "name": "dortlu-oyun",
   "version": "1.0.0",
-  "main": "server.js",
-  "type": "module",
+  "main": "signaling-server.cjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node signaling-server.cjs"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "ws": "^8.18.0"
   }
 }
