@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<title>Dörtlü Tahmin Oyunu — Yerel & Ağ</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+*{box-sizing:border-box;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{margin:0;background:radial-gradient(circle at top,#0b1a2b,#020711);color:#e9f4ff}
+.app{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:rgba(5,20,40,0.96);border-radius:14px;padding:16px;box-shadow:0 14px 40px rgba(0,0,0,0.7);margin-top:10px}
+h1{margin:0 0 8px;font-size:20px}
+small{color:#9fb4d8}
+.btn{border:none;border-radius:10px;padding:10px 14px;font-size:14px;cursor:pointer}
+.btn-primary{background:#3b8cff;color:white}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-secondary{background:transparent;color:#c6d4ff;border:1px solid rgba(255,255,255,0.15)}
+.btn-danger{background:#d9534f;color:#fff}
+input,select{background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.12);padding:8px;color:#e9f4ff}
+input:focus,select:focus{outline:none;border-color:#3b8cff}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row-space{justify-content:space-between}
+.screen{display:none}
+.screen.active{display:block}
+.board-wrap{display:flex;gap:12px;margin-top:16px}
+.panel{flex:1;background:linear-gradient(180deg,#0f2638,#071724);border-radius:12px;padding:12px;min-height:260px}
+.panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.name{font-weight:600}
+.tag{font-size:12px;color:#9fb4d8}
+.badge{font-size:11px;border-radius:999px;padding:4px 10px;background:rgba(0,0,0,0.35);color:#e9f4ff}
+.badge.turn{background:#3b8cff}
+.mask-row{display:flex;gap:6px;margin-top:8px}
+.cell{flex:1;min-width:40px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;background:linear-gradient(180deg,#123249,#071724);letter-spacing:4px}
+.history{margin-top:10px;background:rgba(0,0,0,0.35);border-radius:10px;padding:8px;height:120px;overflow-y:auto;font-size:13px}
+.history div{margin-bottom:2px}
+.input-row{display:flex;gap:8px;margin-top:10px}
+.input-row input{flex:1;text-align:center;font-size:18px;letter-spacing:4px}
+.score{margin-top:10px;font-size:14px}
+.score span{font-weight:600}
+.status-bar{display:flex;gap:10px;align-items:center;font-size:12px;margin-top:6px;color:#9fb4d8}
+.dot{width:10px;height:10px;border-radius:999px;background:#444}
+.dot.on{background:#2ecc71}
+.dot.off{background:#e67e22}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:20}
+.modal{background:#071628;border-radius:14px;padding:18px;max-width:360px;width:90%;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,0.8)}
+.modal h2{margin-top:0}
+.hidden{display:none}
+@media(max-width:800px){
+  .board-wrap{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="card">
+    <h1>Dörtlü Tahmin Oyunu</h1>
+    <small>Aynı cihazdan veya aynı ağda iki kişi oynayabilir.</small>
+
+    <!-- WELCOME -->
+    <div id="screen-welcome" class="screen active">
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;max-width:420px">
+        <button id="btnHotseat" class="btn btn-primary">Aynı Cihazda Oyna</button>
+        <button id="btnLan" class="btn btn-secondary">Aynı Ağda Oyna</button>
+      </div>
+    </div>
+
+    <!-- NAME ENTRY (HOTSEAT) -->
+    <div id="screen-names" class="screen">
+      <p>Oyuncu adlarını girin:</p>
+      <div style="display:flex;flex-direction:column;gap:8px;max-width:420px">
+        <input id="name1" placeholder="1. Oyuncu adı" />
+        <input id="name2" placeholder="2. Oyuncu adı" />
+        <div class="row">
+          <button id="btnNamesBack" class="btn btn-secondary">Geri</button>
+          <button id="btnNamesOk" class="btn btn-primary">Devam</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LAN SETUP -->
+    <div id="screen-lan" class="screen">
+      <p>Ağda oynamak için aynı oda adına bağlanın.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;max-width:420px">
+        <input id="lanRoom" placeholder="Oda adı (ör: can)" />
+        <input id="lanName" placeholder="Senin adın" />
+        <div class="row">
+          <button id="btnLanBack" class="btn btn-secondary">Geri</button>
+          <button id="btnLanConnect" class="btn btn-primary">Bağlan</button>
+        </div>
+        <small>Not: Bilgisayar IP adresi üzerinden (ör: http://192.168.x.x:8080/game.html?room=oda) bağlanın.</small>
+      </div>
+    </div>
+
+    <!-- SECRET ENTRY (both modes) -->
+    <div id="screen-secret" class="screen">
+      <p id="secretPrompt">Gizli 4 basamaklı sayınızı girin.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;max-width:320px">
+        <input id="secretInput" maxlength="4" placeholder="Ör: 3456" />
+        <button id="btnSecretOk" class="btn btn-primary">Tamam</button>
+      </div>
+    </div>
+
+    <!-- GAME -->
+    <div id="screen-game" class="screen">
+      <div class="status-bar">
+        <div><strong id="turnLabel">Sıra —</strong></div>
+        <div>Oda: <span id="roomLabel">-</span></div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <span class="dot off" id="connDot"></span>
+          <span id="connText">Bağlantı yok</span>
+        </div>
+      </div>
+
+      <div class="board-wrap">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="name" id="p1Name">1. Oyuncu</div>
+              <div class="tag">Sol taraf</div>
+            </div>
+            <div class="badge" id="p1Badge">Bekliyor</div>
+          </div>
+          <div class="score">Skor: <span id="p1Score">0</span></div>
+          <div style="margin-top:4px;font-size:13px">Senin gizli sayın: <strong id="p1SecretView">----</strong></div>
+          <div style="margin-top:4px;font-size:13px">Rakibin bildiği haneler:</div>
+          <div class="mask-row" id="p1MaskRow"></div>
+          <div class="input-row">
+            <input id="p1Guess" maxlength="4" placeholder="Tahmin" />
+            <button id="p1GuessBtn" class="btn btn-primary">Tahmin Et</button>
+          </div>
+          <div class="history" id="p1Hist"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="name" id="p2Name">2. Oyuncu</div>
+              <div class="tag">Sağ taraf</div>
+            </div>
+            <div class="badge" id="p2Badge">Bekliyor</div>
+          </div>
+          <div class="score">Skor: <span id="p2Score">0</span></div>
+          <div style="margin-top:4px;font-size:13px">Senin gizli sayın: <strong id="p2SecretView">----</strong></div>
+          <div style="margin-top:4px;font-size:13px">Rakibin bildiği haneler:</div>
+          <div class="mask-row" id="p2MaskRow"></div>
+          <div class="input-row">
+            <input id="p2Guess" maxlength="4" placeholder="Tahmin" />
+            <button id="p2GuessBtn" class="btn btn-primary">Tahmin Et</button>
+          </div>
+          <div class="history" id="p2Hist"></div>
+        </div>
+      </div>
+
+      <div class="row row-space" style="margin-top:12px">
+        <button id="btnRestart" class="btn btn-secondary">Yeni Tur</button>
+        <button id="btnBackMenu" class="btn btn-danger">Ana Menü</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:10px;font-size:12px;color:#9fb4d8">
+    Bu bir <strong>Can Acar</strong> oyunudur. Paylaşılması kesinlikle yasaktır.
+  </div>
+</div>
+
+<!-- Winner Modal -->
+<div id="winnerModal" class="modal-backdrop">
+  <div class="modal">
+    <h2>Oyun Bitti</h2>
+    <p id="winnerText">Kazanan: —</p>
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:center">
+      <button id="winnerAgain" class="btn btn-primary">Yeni Tur</button>
+      <button id="winnerMenu" class="btn btn-secondary">Ana Menü</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- DOM ---
+const scrWelcome = document.getElementById('screen-welcome');
+const scrNames   = document.getElementById('screen-names');
+const scrLan     = document.getElementById('screen-lan');
+const scrSecret  = document.getElementById('screen-secret');
+const scrGame    = document.getElementById('screen-game');
+
+const btnHotseat = document.getElementById('btnHotseat');
+const btnLan     = document.getElementById('btnLan');
+
+const name1Input = document.getElementById('name1');
+const name2Input = document.getElementById('name2');
+const btnNamesBack = document.getElementById('btnNamesBack');
+const btnNamesOk   = document.getElementById('btnNamesOk');
+
+const lanRoomInput = document.getElementById('lanRoom');
+const lanNameInput = document.getElementById('lanName');
+const btnLanBack   = document.getElementById('btnLanBack');
+const btnLanConnect= document.getElementById('btnLanConnect');
+
+const secretPrompt = document.getElementById('secretPrompt');
+const secretInput  = document.getElementById('secretInput');
+const btnSecretOk  = document.getElementById('btnSecretOk');
+
+const turnLabel = document.getElementById('turnLabel');
+const roomLabel = document.getElementById('roomLabel');
+const connDot   = document.getElementById('connDot');
+const connText  = document.getElementById('connText');
+
+const p1NameEl = document.getElementById('p1Name');
+const p2NameEl = document.getElementById('p2Name');
+const p1Badge = document.getElementById('p1Badge');
+const p2Badge = document.getElementById('p2Badge');
+const p1SecretView = document.getElementById('p1SecretView');
+const p2SecretView = document.getElementById('p2SecretView');
+const p1MaskRow = document.getElementById('p1MaskRow');
+const p2MaskRow = document.getElementById('p2MaskRow');
+const p1Guess = document.getElementById('p1Guess');
+const p2Guess = document.getElementById('p2Guess');
+const p1GuessBtn = document.getElementById('p1GuessBtn');
+const p2GuessBtn = document.getElementById('p2GuessBtn');
+const p1Hist = document.getElementById('p1Hist');
+const p2Hist = document.getElementById('p2Hist');
+const p1ScoreEl = document.getElementById('p1Score');
+const p2ScoreEl = document.getElementById('p2Score');
+
+const btnRestart = document.getElementById('btnRestart');
+const btnBackMenu= document.getElementById('btnBackMenu');
+
+const winnerModal = document.getElementById('winnerModal');
+const winnerText  = document.getElementById('winnerText');
+const winnerAgain = document.getElementById('winnerAgain');
+const winnerMenu  = document.getElementById('winnerMenu');
+
+// --- STATE ---
+let mode = null; // 'local' | 'lan'
+
+// local hotseat state
+let localNames = ['1. Oyuncu','2. Oyuncu'];
+let localSecrets = ['',''];
+let localMasks = [['*','*','*','*'],['*','*','*','*']];
+let scores = [0,0];
+let localTurn = 0; // 0 or 1
+
+// network state
+let ws = null;
+let room = null;
+let localIndex = null; // 0 or 1
+let remoteName = null;
+let secretLocal = '';
+let secretRemoteKnownMask = ['*','*','*','*'];
+let readyLocal = false;
+let readyRemote = false;
+let netTurn = 0; // 0 or 1
+
+function showScreen(el){
+  [scrWelcome,scrNames,scrLan,scrSecret,scrGame].forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
+}
+function initMask(rowEl){
+  rowEl.innerHTML='';
+  for(let i=0;i<4;i++){
+    const d=document.createElement('div');
+    d.className='cell';
+    d.textContent='*';
+    rowEl.appendChild(d);
+  }
+}
+function updateMask(rowEl, maskArr){
+  const cells = rowEl.querySelectorAll('.cell');
+  for(let i=0;i<4;i++){
+    cells[i].textContent = maskArr[i] || '*';
+  }
+}
+function updateConn(open){
+  connDot.className = 'dot ' + (open?'on':'off');
+  connText.textContent = open?'Bağlı':'Bağlı değil';
+}
+function computeMask(secret, guess){
+  const res=[];
+  for(let i=0;i<4;i++){
+    res[i] = (secret[i]===guess[i])? secret[i]:'*';
+  }
+  return res;
+}
+function addHist(el, txt){
+  el.innerHTML += `<div>${txt}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+function resetBoardCommon(){
+  initMask(p1MaskRow);
+  initMask(p2MaskRow);
+  p1Hist.innerHTML=''; p2Hist.innerHTML='';
+  p1Guess.value=''; p2Guess.value='';
+  p1SecretView.textContent='----';
+  p2SecretView.textContent='----';
+  p1Badge.textContent='Bekliyor';
+  p2Badge.textContent='Bekliyor';
+}
+
+// --- HOTSEAT FLOW ---
+btnHotseat.addEventListener('click', ()=>{
+  mode='local';
+  showScreen(scrNames);
+});
+
+btnNamesBack.addEventListener('click', ()=>{
+  showScreen(scrWelcome);
+});
+
+btnNamesOk.addEventListener('click', ()=>{
+  const n1 = (name1Input.value||'').trim() || '1. Oyuncu';
+  const n2 = (name2Input.value||'').trim() || '2. Oyuncu';
+  localNames = [n1,n2];
+  p1NameEl.textContent = n1;
+  p2NameEl.textContent = n2;
+  scores = [0,0];
+  p1ScoreEl.textContent = '0';
+  p2ScoreEl.textContent = '0';
+  localSecrets = ['',''];
+  localMasks = [['*','*','*','*'],['*','*','*','*']];
+  resetBoardCommon();
+  localTurn = 0;
+  secretPrompt.textContent = `${localNames[0]}, gizli 4 basamaklı sayınızı girin (diğer oyuncu bakmasın)`;
+  secretInput.value='';
+  showScreen(scrSecret);
+});
+
+// secret entry (hotseat + lan)
+btnSecretOk.addEventListener('click', ()=>{
+  const v = (secretInput.value||'').trim();
+  if(!/^[0-9]{4}$/.test(v)){ alert('4 basamaklı sayı girin.'); return; }
+
+  if(mode==='local'){
+    if(localSecrets[0]===''){
+      localSecrets[0]=v;
+      secretInput.value='';
+      secretPrompt.textContent = `${localNames[1]}, gizli 4 basamaklı sayınızı girin (diğer oyuncu bakmasın)`;
+    } else if(localSecrets[1]===''){
+      localSecrets[1]=v;
+      secretInput.value='';
+      // start game
+      startLocalGame();
+    }
+  } else if(mode==='lan'){
+    // network: only store local secret, never send
+    secretLocal = v;
+    secretInput.value='';
+    readyLocal = true;
+    if(localIndex===0){
+      p1SecretView.textContent='----';
+    } else {
+      p2SecretView.textContent='----';
+    }
+    if(ws && ws.readyState===WebSocket.OPEN){
+      ws.send(JSON.stringify({type:'hello', room, name: lanNameInput.value.trim() || 'Oyuncu', index: localIndex}));
+      ws.send(JSON.stringify({type:'ready', room, name: lanNameInput.value.trim() || 'Oyuncu', index: localIndex}));
+    }
+    showScreen(scrGame);
+    turnLabel.textContent = 'Rakibin hazır olması bekleniyor...';
+  }
+});
+
+function startLocalGame(){
+  resetBoardCommon();
+  p1SecretView.textContent='----';
+  p2SecretView.textContent='----';
+  localMasks = [['*','*','*','*'],['*','*','*','*']];
+  updateMask(p1MaskRow, localMasks[0]);
+  updateMask(p2MaskRow, localMasks[1]);
+  localTurn = 0;
+  updateTurnUI();
+  showScreen(scrGame);
+}
+
+function updateTurnUI(){
+  if(mode==='local'){
+    if(localTurn===0){
+      turnLabel.textContent = `Sıra: ${localNames[0]}`;
+      p1Badge.textContent='Sıra Sende';
+      p2Badge.textContent='Bekliyor';
+      p1Guess.disabled=false; p1GuessBtn.disabled=false;
+      p2Guess.disabled=true;  p2GuessBtn.disabled=true;
+    } else {
+      turnLabel.textContent = `Sıra: ${localNames[1]}`;
+      p1Badge.textContent='Bekliyor';
+      p2Badge.textContent='Sıra Sende';
+      p1Guess.disabled=true; p1GuessBtn.disabled=true;
+      p2Guess.disabled=false;p2GuessBtn.disabled=false;
+    }
+  } else if(mode==='lan'){
+    if(localIndex===null){
+      p1Guess.disabled=true; p1GuessBtn.disabled=true;
+      p2Guess.disabled=true; p2GuessBtn.disabled=true;
+      turnLabel.textContent='Bağlantı...';
+      return;
+    }
+    const isMyTurn = (netTurn===localIndex);
+    turnLabel.textContent = isMyTurn ? `Sıra sende (${localIndex===0? p1NameEl.textContent:p2NameEl.textContent})` : 'Rakip düşünüyor...';
+    if(localIndex===0){
+      p1Badge.textContent = isMyTurn?'Sıra Sende':'Bekliyor';
+      p2Badge.textContent = isMyTurn?'Bekliyor':'Rakip';
+      p1Guess.disabled=!isMyTurn; p1GuessBtn.disabled=!isMyTurn;
+      p2Guess.disabled=true; p2GuessBtn.disabled=true;
+    } else {
+      p2Badge.textContent = isMyTurn?'Sıra Sende':'Bekliyor';
+      p1Badge.textContent = isMyTurn?'Bekliyor':'Rakip';
+      p2Guess.disabled=!isMyTurn; p2GuessBtn.disabled=!isMyTurn;
+      p1Guess.disabled=true; p1GuessBtn.disabled=true;
+    }
+  }
+}
+
+// local guessing
+p1GuessBtn.addEventListener('click', ()=>{
+  if(mode==='local'){
+    if(localTurn!==0){ alert('Sıra sende değil.'); return; }
+    const g = (p1Guess.value||'').trim();
+    if(!/^[0-9]{4}$/.test(g)){ alert('4 basamaklı sayı girin.'); return;}
+    const mask = computeMask(localSecrets[1], g);
+    for(let i=0;i<4;i++){ if(mask[i]!=='*') localMasks[1][i]=mask[i]; }
+    updateMask(p2MaskRow, localMasks[1]);
+    addHist(p1Hist, `Sen: ${g} → ${mask.join('')}`);
+    addHist(p2Hist, `${localNames[0]} tahmin: ${g} → ${mask.join('')}`);
+    p1Guess.value='';
+    if(mask.join('')===localSecrets[1]){ endLocalGame(0); return; }
+    localTurn=1; updateTurnUI();
+  } else if(mode==='lan'){
+    if(localIndex!==0) return;
+    if(netTurn!==0){ alert('Sıra sende değil.'); return;}
+    const g=(p1Guess.value||'').trim();
+    if(!/^[0-9]{4}$/.test(g)){ alert('4 basamaklı sayı girin.'); return;}
+    ws.send(JSON.stringify({type:'guess', room, from:0, target:1, guess:g}));
+    addHist(p1Hist, `Sen: ${g} → ...`);
+    addHist(p2Hist, `${p1NameEl.textContent} tahmin: ${g} → ...`);
+    p1Guess.value='';
+    netTurn=1;
+    ws.send(JSON.stringify({type:'setTurn', room, turn: netTurn}));
+    updateTurnUI();
+  }
+});
+
+p2GuessBtn.addEventListener('click', ()=>{
+  if(mode==='local'){
+    if(localTurn!==1){ alert('Sıra sende değil.'); return; }
+    const g = (p2Guess.value||'').trim();
+    if(!/^[0-9]{4}$/.test(g)){ alert('4 basamaklı sayı girin.'); return;}
+    const mask = computeMask(localSecrets[0], g);
+    for(let i=0;i<4;i++){ if(mask[i]!=='*') localMasks[0][i]=mask[i]; }
+    updateMask(p1MaskRow, localMasks[0]);
+    addHist(p2Hist, `Sen: ${g} → ${mask.join('')}`);
+    addHist(p1Hist, `${localNames[1]} tahmin: ${g} → ${mask.join('')}`);
+    p2Guess.value='';
+    if(mask.join('')===localSecrets[0]){ endLocalGame(1); return; }
+    localTurn=0; updateTurnUI();
+  } else if(mode==='lan'){
+    if(localIndex!==1) return;
+    if(netTurn!==1){ alert('Sıra sende değil.'); return;}
+    const g=(p2Guess.value||'').trim();
+    if(!/^[0-9]{4}$/.test(g)){ alert('4 basamaklı sayı girin.'); return;}
+    ws.send(JSON.stringify({type:'guess', room, from:1, target:0, guess:g}));
+    addHist(p2Hist, `Sen: ${g} → ...`);
+    addHist(p1Hist, `${p2NameEl.textContent} tahmin: ${g} → ...`);
+    p2Guess.value='';
+    netTurn=0;
+    ws.send(JSON.stringify({type:'setTurn', room, turn: netTurn}));
+    updateTurnUI();
+  }
+});
+
+function endLocalGame(winnerIdx){
+  if(winnerIdx===0){
+    scores[0]++; p1ScoreEl.textContent = scores[0];
+  } else {
+    scores[1]++; p2ScoreEl.textContent = scores[1];
+  }
+  p1SecretView.textContent = localSecrets[0];
+  p2SecretView.textContent = localSecrets[1];
+  winnerText.textContent = `Kazanan: ${localNames[winnerIdx]}`;
+  winnerModal.style.display='flex';
+}
+
+// --- LAN FLOW ---
+btnLan.addEventListener('click', ()=>{
+  mode='lan';
+  // oda adı URL'den alınabiliyorsa doldur
+  const params = new URLSearchParams(location.search);
+  const r = params.get('room');
+  if(r){ lanRoomInput.value = r; }
+  showScreen(scrLan);
+});
+
+btnLanBack.addEventListener('click', ()=>{
+  // bağlantı varsa kapatma kullanıcıya kalmış; sadece ekrana geri dön
+  showScreen(scrWelcome);
+});
+
+btnLanConnect.addEventListener('click', ()=>{
+  const rn = (lanRoomInput.value||'').trim();
+  const nm = (lanNameInput.value||'').trim() || 'Oyuncu';
+  if(!rn){ alert('Oda adı girin.'); return; }
+  room = rn;
+  roomLabel.textContent = room;
+  p1NameEl.textContent = '1. Oyuncu';
+  p2NameEl.textContent = '2. Oyuncu';
+  remoteName = null;
+  secretLocal='';
+  readyLocal=false; readyRemote=false;
+  netTurn=0;
+  resetBoardCommon();
+  connectWS(nm);
+});
+
+function connectWS(displayName){
+  try{
+    const url = `ws://${location.hostname}:8888`;
+    ws = new WebSocket(url);
+  }catch(e){
+    alert('WebSocket oluşturulamadı: ' + e.message);
+    return;
+  }
+  ws.onopen = ()=>{
+    updateConn(true);
+    ws.send(JSON.stringify({cmd:'join', room}));
+  };
+  ws.onclose = ()=>{
+    updateConn(false);
+    ws=null;
+  };
+  ws.onerror = (e)=>{
+    console.warn('WS error', e);
+    updateConn(false);
+  };
+  ws.onmessage = (ev)=>{
+    let m;
+    try{ m = JSON.parse(ev.data); }catch(e){ return; }
+    handleSignal(m, displayName);
+  };
+  // bağlanır bağlanmaz gizli sayı istemeyelim; önce joined gelsin, sonra secret ekranına geçeceğiz
+}
+
+// handle all incoming WS messages
+function handleSignal(m, displayName){
+  console.log('Signal', m);
+  if(m.type==='joined'){
+    // peers sayısına göre bu cihazın indexi
+    if(localIndex===null){
+      localIndex = (m.peers===1)?0:1;
+      if(localIndex===0){
+        p1NameEl.textContent = displayName;
+        p2NameEl.textContent = 'Rakip';
+      } else {
+        p2NameEl.textContent = displayName;
+        p1NameEl.textContent = 'Rakip';
+      }
+    }
+    addHist(p1Hist, `Odaya katıldın. Toplam: ${m.peers}`);
+    // joined sonrası secret ekranına geç
+    secretPrompt.textContent = `${displayName}, gizli 4 basamaklı sayınızı girin (rakip görmesin)`;
+    secretInput.value='';
+    showScreen(scrSecret);
+    return;
+  }
+
+  if(m.type==='peer-joined'){
+    addHist(p1Hist, `Rakip odaya katıldı. Toplam: ${m.peers}`);
+    return;
+  }
+
+  if(m.type==='peer-left'){
+    addHist(p1Hist, `Rakip oyundan ayrıldı.`);
+    return;
+  }
+
+  if(m.type==='hello'){
+    // rakip adını al
+    remoteName = m.name;
+    if(m.index===0){
+      p1NameEl.textContent = m.name;
+      if(localIndex===1) p2NameEl.textContent = displayNameFromLocal();
+    } else if(m.index===1){
+      p2NameEl.textContent = m.name;
+      if(localIndex===0) p1NameEl.textContent = displayNameFromLocal();
+    }
+    addHist(p1Hist, `Rakip: ${m.name}`);
+    return;
+  }
+
+  if(m.type==='ready'){
+    readyRemote = true;
+    addHist(p1Hist, `Rakip hazır: ${m.name}`);
+    if(readyLocal && readyRemote){
+      startNetworkGame();
+    }
+    return;
+  }
+
+  if(m.type==='setTurn'){
+    netTurn = m.turn;
+    updateTurnUI();
+    return;
+  }
+
+  if(m.type==='guess'){
+    const from = m.from;
+    const target = m.target;
+    const g = m.guess;
+    // tüm ekranlar tüm tahminleri görsün
+    const fromName = (from===0)? p1NameEl.textContent : p2NameEl.textContent;
+    addHist(p1Hist, `${fromName} tahmin: ${g} → ...`);
+    addHist(p2Hist, `${fromName} tahmin: ${g} → ...`);
+
+    if(localIndex===target){
+      // bu cihazın gizli sayısı hedef
+      const mask = computeMask(secretLocal, g);
+      if(localIndex===0){
+        // rakip bizim sayımızı tahmin ediyor, kendi panelimizde mask1
+        let current = getMaskArrayFromRow(p1MaskRow);
+        for(let i=0;i<4;i++) if(mask[i]!=='*') current[i]=mask[i];
+        updateMask(p1MaskRow, current);
+      } else {
+        let current = getMaskArrayFromRow(p2MaskRow);
+        for(let i=0;i<4;i++) if(mask[i]!=='*') current[i]=mask[i];
+        updateMask(p2MaskRow, current);
+      }
+      // mask'i rakibe geri gönder
+      if(ws && ws.readyState===WebSocket.OPEN){
+        ws.send(JSON.stringify({type:'mask', room, from: target, to: from, guess:g, mask}));
+        if(mask.join('')===g){
+          ws.send(JSON.stringify({type:'end', room, winner: from}));
+        }
+      }
+    }
+    return;
+  }
+
+  if(m.type==='mask'){
+    const mask = m.mask;
+    const g = m.guess;
+    // bu bizim tahminimize gelen cevap
+    if(localIndex===0){
+      // biz 0 isek karşı tarafın sayısı p2 panelinde
+      let current = getMaskArrayFromRow(p2MaskRow);
+      for(let i=0;i<4;i++) if(mask[i]!=='*') current[i]=mask[i];
+      updateMask(p2MaskRow, current);
+      addHist(p1Hist, `Sen: ${g} → ${mask.join('')}`);
+    } else if(localIndex===1){
+      let current = getMaskArrayFromRow(p1MaskRow);
+      for(let i=0;i<4;i++) if(mask[i]!=='*') current[i]=mask[i];
+      updateMask(p1MaskRow, current);
+      addHist(p2Hist, `Sen: ${g} → ${mask.join('')}`);
+    }
+    return;
+  }
+
+  if(m.type==='end'){
+    onNetworkWin(m.winner);
+    return;
+  }
+}
+
+function displayNameFromLocal(){
+  return lanNameInput.value.trim() || 'Oyuncu';
+}
+
+function startNetworkGame(){
+  resetBoardCommon();
+  netTurn = 0; // 1. oyuncu (index 0) başlasın
+  if(localIndex===0){
+    p1SecretView.textContent='----';
+  } else {
+    p2SecretView.textContent='----';
+  }
+  updateTurnUI();
+  showScreen(scrGame);
+  addHist(p1Hist,'Ağ oyunu başladı.');
+}
+
+// mask row'dan dizi çıkar
+function getMaskArrayFromRow(rowEl){
+  const cells = rowEl.querySelectorAll('.cell');
+  return Array.from(cells).map(c=>c.textContent==='*'?'*':c.textContent);
+}
+
+// network winner
+function onNetworkWin(winnerIdx){
+  const name = (winnerIdx===0)? p1NameEl.textContent : p2NameEl.textContent;
+  if(winnerIdx===0){ scores[0]++; p1ScoreEl.textContent = scores[0]; }
+  else { scores[1]++; p2ScoreEl.textContent = scores[1]; }
+  // kendi gizli sayımızı gösterelim
+  if(localIndex===0) p1SecretView.textContent = secretLocal;
+  if(localIndex===1) p2SecretView.textContent = secretLocal;
+  winnerText.textContent = `Kazanan: ${name}`;
+  winnerModal.style.display='flex';
+}
+
+// winner modal buttons
+winnerAgain.addEventListener('click', ()=>{
+  winnerModal.style.display='none';
+  if(mode==='local'){
+    // aynı isimlerle yeni tur
+    localSecrets=['',''];
+    localMasks=[['*','*','*','*'],['*','*','*','*']];
+    resetBoardCommon();
+    localTurn=0;
+    secretPrompt.textContent = `${localNames[0]}, gizli 4 basamaklı sayınızı girin (diğer oyuncu bakmasın)`;
+    secretInput.value='';
+    showScreen(scrSecret);
+  } else if(mode==='lan'){
+    // sadece kendi gizlimizi yeniden alalım
+    secretLocal='';
+    resetBoardCommon();
+    secretPrompt.textContent = `${displayNameFromLocal()}, gizli 4 basamaklı sayınızı girin (rakip görmesin)`;
+    secretInput.value='';
+    showScreen(scrSecret);
+  }
+});
+winnerMenu.addEventListener('click', ()=>{
+  winnerModal.style.display='none';
+  goBackToMenu();
+});
+
+// bottom buttons
+btnRestart.addEventListener('click', ()=>{
+  if(mode==='local'){
+    localSecrets=['',''];
+    localMasks=[['*','*','*','*'],['*','*','*','*']];
+    resetBoardCommon();
+    localTurn=0;
+    secretPrompt.textContent = `${localNames[0]}, gizli 4 basamaklı sayınızı girin (diğer oyuncu bakmasın)`;
+    secretInput.value='';
+    showScreen(scrSecret);
+  } else if(mode==='lan'){
+    secretLocal='';
+    resetBoardCommon();
+    secretPrompt.textContent = `${displayNameFromLocal()}, gizli 4 basamaklı sayınızı girin (rakip görmesin)`;
+    secretInput.value='';
+    showScreen(scrSecret);
+  }
+});
+
+btnBackMenu.addEventListener('click', ()=>{
+  goBackToMenu();
+});
+
+function goBackToMenu(){
+  if(ws){ try{ ws.close(); }catch(e){} ws=null; }
+  updateConn(false);
+  mode=null;
+  localIndex=null;
+  room=null;
+  roomLabel.textContent='-';
+  resetBoardCommon();
+  showScreen(scrWelcome);
+}
+
+// init masks
+initMask(p1MaskRow);
+initMask(p2MaskRow);
+
+// prefill room from URL
+(function(){
+  const params = new URLSearchParams(location.search);
+  const r = params.get('room');
+  if(r){ lanRoomInput.value = r; roomLabel.textContent=r; }
+})();
+</script>
+</body>
+</html>
